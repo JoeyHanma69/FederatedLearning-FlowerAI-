@@ -12,7 +12,7 @@ class Net(nn.Module):
     """Model (simple CNN adapted from PyTorch: A 60 Minute Blitz)"""
     def __init__(self): 
         super(Net, self).__init__() 
-        self.cov1 = nn.Conv2d(3, 6, 5)  
+        self.conv1 = nn.Conv2d(3, 6, 5)  
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
@@ -23,21 +23,19 @@ class Net(nn.Module):
         x = self.pool(F.relu(self.conv1(x))) 
         x = self.pool(F.relu(self.conv2(x)))  
         x = x.view(-1, 16 * 5 * 5) 
-        x = F.view(self.fc1(x)) 
+        x = F.relu(self.fc1(x)) 
         x = F.relu(self.fc2(x)) 
-        return self.fc3(x)  
+        return self.fc3(x)   
     
-    
-    
-def train(net, trainloader, epochs, device): 
+def train(net, trainloader, epochs): 
     """Train the model on the training set""" 
     net.to(DEVICE) # move model to GPU if available 
-    criterion = torch.nn.CrossEntropyLoss().to(device) 
+    criterion = torch.nn.CrossEntropyLoss().to(DEVICE) 
     optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9) 
     for _ in range(epochs):  
         for images, labels in trainloader: 
             optimizer.zero_grad() 
-            criterion(net(images.to(device)), labels.to(device)).backward()  
+            criterion(net(images.to(DEVICE)), labels.to(DEVICE)).backward()  
             optimizer.step() 
                          
     
@@ -59,7 +57,6 @@ def load_data():
     trainset = CIFAR10("./data", train=True, download=True, transform=trf)
     testset = CIFAR10("./data", train=False, download=True, transform=trf)
     return DataLoader(trainset, batch_size=32, shuffle=True), DataLoader(testset)
-    
     
 def load_model():
     return Net().to(DEVICE)  
