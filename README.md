@@ -1,1 +1,1 @@
-# FederatedLearning-FlowerAI-
+# FederatedLearning (FlowerAI)
