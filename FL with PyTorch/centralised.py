@@ -50,7 +50,23 @@ class Net(nn.Module):
                 loss += criterion(outputs, labels.to(DEVICE)).item()  
                 total += labels.size(0)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item() 
-        return loss / len(testloader.dataset), correct / total
+        return loss / len(testloader.dataset), correct / total 
+    
+    def load_data(): 
+        trf = Compose([ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]) 
+        trainset = CIFAR10("./data", train=True, download=True, transform=trf) 
+        testset = CIFAR10("./data", train=False, download=True, transform=trf)  
+        return DataLoader(trainset, batch_size=32, shuffle=True), DataLoader(testset) 
+    
+    def load_model(): 
+        return Net().to(DEVICE) 
+    
+    if __name__ == "__main__": 
+        net = load_model() 
+        trainloader, testloader = load_data() 
+        train(net, trainloader, 5) 
+        loss, accuracy = test(net, testloader) 
+        print(f"Loss: {loss:.5f}, Accuracy: {accuracy:.3f}")
     
 
         
