@@ -39,9 +39,9 @@ def train(net, trainloader, epochs):
             optimizer.step() 
                          
     
-def test(net, testloader, device): 
+def test(net, testloader): 
     """Validate the model on the test set. """
-    net.to(device) 
+    net.to(DEVICE) 
     criterion = torch.nn.CrossEntropyLoss() 
     correct, loss = 0, 0.0 
     with torch.no_grad():  
