@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10  
 
 
-DEVICE = "CPU"
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class Net(nn.Module):   
     """Model (simple CNN adapted from PyTorch: A 60 Minute Blitz)"""
