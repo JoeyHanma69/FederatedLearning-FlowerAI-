@@ -43,7 +43,7 @@ def test(net, testloader):
     """Validate the model on the test set. """
     net.to(DEVICE) 
     criterion = torch.nn.CrossEntropyLoss() 
-    correct, loss = 0, 0.0 
+    correct, total, loss = 0, 0, 0.0 
     with torch.no_grad():  
         for images, labels in testloader: 
             outputs = net(images.to(DEVICE)) 
