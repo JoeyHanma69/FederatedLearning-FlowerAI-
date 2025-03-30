@@ -31,21 +31,13 @@ class Net(nn.Module):
         """Train the model on the training set""" 
         net.to(DEVICE) # move model to GPU if available 
         criterion = torch.nn.CrossEntropyLoss().to(device) 
-        optimizer = torch.optim.SGD(net.parameters(), lr=0.1, momentum=0.9) 
-        net.train() 
-        running_loss = 0.0 
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9) 
         for _ in range(epochs):  
-            for batch in trainloader: 
-                images = batch["img"] 
-                labels = batch["label"] 
+            for images, labels in trainloader: 
                 optimizer.zero_grad() 
-                loss = criterion(net(images.to(device)), labels.to(device)) 
-                loss.backward() 
+                criterion(net(images.to(device)), labels.to(device)).backward()  
                 optimizer.step() 
-                running_loss += loss.item() 
-        
-        avg_trainloss = running_loss / len(trainloader) 
-        return avg_trainloss 
+                         
     
     def test(net, testloader, device): 
         """Validate the model on the test set. """
@@ -53,16 +45,14 @@ class Net(nn.Module):
         criterion = torch.nn.CrossEntropyLoss() 
         correct, loss = 0, 0.0 
         with torch.no_grad():  
-            for batch in testloader: 
-                images = batch["img"].to(device) 
-                labels = batch["label"].to(device) 
-                outputs = net(images) 
-                loss += criterion(outputs, labels).item() 
+            for images, labels in testloader: 
+                outputs = net(images.to(DEVICE)) 
+                loss += criterion(outputs, labels.to(DEVICE)).item()  
+                total += labels.size(0)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item() 
-        accuracy = correct / len(testloader.dataset) 
-        return loss, accuracy 
+        return loss / len(testloader.dataset), correct / total
     
-                                        
+
         
         
     
