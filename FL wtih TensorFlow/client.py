@@ -21,6 +21,6 @@ class FlowerClient(fl.client.NumPyClient):
         loss, accuracy = model.evaluate(x_test, y_test) 
         return loss, len(x_test), {"accuracy": accuracy}  
     
-fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=FlowerClient)
+fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=FlowerClient())
     
         
