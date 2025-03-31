@@ -7,8 +7,6 @@ model.compile("adam", "sparse_categorical_crossentropy", metrics=["accuracy"])
 (x_train, y_train), (x_test, y_test) =tf.keras.datasets.cifar10.load_data() 
 
 
-
-
 class FlowerClient(fl.client.NumPyClient): 
     def get_parameters(self, config): 
         return model.get_weights() 
