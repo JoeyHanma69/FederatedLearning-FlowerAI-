@@ -1,39 +1,48 @@
-import warnings
+"""mlxexample: A Flower / MLX app."""
 
+import mlx.core as mx
+import mlx.nn as nn
+import mlx.optimizers as optim
 from flwr.client import Client, ClientApp, NumPyClient
 from flwr.common import Context
-from sklearn.metrics import log_loss
-
-from sklearnexample.task import (
-    create_log_reg_and_instantiate_parameters,
-    get_model_parameters,
+from mlxexample.task import (
+    MLP,
+    batch_iterate,
+    eval_fn,
+    get_params,
     load_data,
-    set_model_params,
+    loss_fn,
+    set_params,
 )
 
 
-# Define Flower client
-class MnistClient(NumPyClient):
-    def __init__(self, model, X_train, X_test, y_train, y_test):
+class FlowerClient(NumPyClient):
+    def __init__(self, model, optimizer, batch_size, data):
+        self.train_images, self.train_labels, self.test_images, self.test_labels = data
         self.model = model
-        self.X_train = X_train
-        self.X_test = X_test
-        self.y_train = y_train
-        self.y_test = y_test
+        self.optimizer = optimizer
+        self.num_epochs = 1
+        self.batch_size = batch_size
 
     def fit(self, parameters, config):
-        set_model_params(self.model, parameters)
-        # Ignore convergence failure due to low local epochs
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.model.fit(self.X_train, self.y_train)
-        return get_model_parameters(self.model), len(self.X_train), {}
+        """Train the model with data of this client."""
+        set_params(self.model, parameters)
+        loss_and_grad_fn = nn.value_and_grad(self.model, loss_fn)
+        for _ in range(self.num_epochs):
+            for X, y in batch_iterate(
+                self.batch_size, self.train_images, self.train_labels
+            ):
+                _, grads = loss_and_grad_fn(self.model, X, y)
+                self.optimizer.update(self.model, grads)
+                mx.eval(self.model.parameters(), self.optimizer.state)
+        return get_params(self.model), len(self.train_images), {}
 
     def evaluate(self, parameters, config):
-        set_model_params(self.model, parameters)
-        loss = log_loss(self.y_test, self.model.predict_proba(self.X_test))
-        accuracy = self.model.score(self.X_test, self.y_test)
-        return loss, len(self.X_test), {"accuracy": accuracy}
+        """Evaluate the model on the data this client has."""
+        set_params(self.model, parameters)
+        accuracy = eval_fn(self.model, self.test_images, self.test_labels)
+        loss = loss_fn(self.model, self.test_images, self.test_labels)
+        return loss.item(), len(self.test_images), {"accuracy": accuracy.item()}
 
 
 def client_fn(context: Context) -> Client:
@@ -42,17 +51,22 @@ def client_fn(context: Context) -> Client:
     # Read the node_config to fetch data partition associated to this node
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
-    X_train, X_test, y_train, y_test = load_data(partition_id, num_partitions)
+    data = load_data(partition_id, num_partitions)
 
     # Read the run config to get settings to configure the Client
-    penalty = context.run_config["penalty"]
+    num_layers = context.run_config["num-layers"]
+    hidden_dim = context.run_config["hidden-dim"]
+    img_size = context.run_config["img-size"]
+    batch_size = context.run_config["batch-size"]
+    lr = context.run_config["learning-rate"]
 
-    # Create LogisticRegression Model
-    model = create_log_reg_and_instantiate_parameters(penalty)
+    # Prepare model and optimizer
+    model = MLP(num_layers, img_size**2, hidden_dim)
+    optimizer = optim.SGD(learning_rate=lr)
 
     # Return Client instance
-    return MnistClient(model, X_train, X_test, y_train, y_test).to_client()
+    return FlowerClient(model, optimizer, batch_size, data).to_client()
 
 
-# Create ClientApp
+# Flower ClientApp
 app = ClientApp(client_fn=client_fn)

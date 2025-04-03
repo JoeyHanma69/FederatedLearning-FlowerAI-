@@ -1,62 +1,61 @@
-"""sklearnexample: A Flower / scikit-learn app."""
+"""mlxexample: A Flower / MLX app."""
 
+import mlx.core as mx
+import mlx.nn as nn
 import numpy as np
-from flwr.common import NDArrays
+from datasets.utils.logging import disable_progress_bar
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner
-from sklearn.linear_model import LogisticRegression
 
-# This information is needed to create a correct scikit-learn model
-NUM_UNIQUE_LABELS = 10  # MNIST has 10 classes
-NUM_FEATURES = 784  # Number of features in MNIST dataset
+disable_progress_bar()
 
 
-def get_model_parameters(model: LogisticRegression) -> NDArrays:
-    """Returns the parameters of a sklearn LogisticRegression model."""
-    if model.fit_intercept:
-        params = [
-            model.coef_,
-            model.intercept_,
+class MLP(nn.Module):
+    """A simple MLP."""
+
+    def __init__(
+        self, num_layers: int, input_dim: int, hidden_dim: int, output_dim: int = 10
+    ):
+        super().__init__()
+        layer_sizes = [input_dim] + [hidden_dim] * num_layers + [output_dim]
+        self.layers = [
+            nn.Linear(idim, odim)
+            for idim, odim in zip(layer_sizes[:-1], layer_sizes[1:])
         ]
-    else:
-        params = [
-            model.coef_,
-        ]
-    return params
+
+    def __call__(self, x):
+        for l in self.layers[:-1]:
+            x = mx.maximum(l(x), 0.0)
+        return self.layers[-1](x)
 
 
-def set_model_params(model: LogisticRegression, params: NDArrays) -> LogisticRegression:
-    """Sets the parameters of a sklean LogisticRegression model."""
-    model.coef_ = params[0]
-    if model.fit_intercept:
-        model.intercept_ = params[1]
-    return model
+def get_params(model):
+    layers = model.parameters()["layers"]
+    return [np.array(val) for layer in layers for _, val in layer.items()]
 
 
-def set_initial_params(model: LogisticRegression) -> None:
-    """Sets initial parameters as zeros Required since model params are uninitialized
-    until model.fit is called.
-
-    But server asks for initial parameters from clients at launch. Refer to
-    sklearn.linear_model.LogisticRegression documentation for more information.
-    """
-    model.classes_ = np.arange(NUM_UNIQUE_LABELS)
-
-    model.coef_ = np.zeros((NUM_UNIQUE_LABELS, NUM_FEATURES))
-    if model.fit_intercept:
-        model.intercept_ = np.zeros((NUM_UNIQUE_LABELS,))
+def set_params(model, parameters):
+    new_params = {}
+    new_params["layers"] = [
+        {"weight": mx.array(parameters[i]), "bias": mx.array(parameters[i + 1])}
+        for i in range(0, len(parameters), 2)
+    ]
+    model.update(new_params)
 
 
-def create_log_reg_and_instantiate_parameters(penalty):
-    """Helper function to create a LogisticRegression model."""
-    model = LogisticRegression(
-        penalty=penalty,
-        max_iter=1,  # local epoch
-        warm_start=True,  # prevent refreshing weights when fitting,
-    )
-    # Setting initial parameters, akin to model.compile for keras models
-    set_initial_params(model)
-    return model
+def loss_fn(model, X, y):
+    return mx.mean(nn.losses.cross_entropy(model(X), y))
+
+
+def eval_fn(model, X, y):
+    return mx.mean(mx.argmax(model(X), axis=1) == y)
+
+
+def batch_iterate(batch_size, X, y):
+    perm = mx.array(np.random.permutation(y.size))
+    for s in range(0, y.size, batch_size):
+        ids = perm[s : s + batch_size]
+        yield X[ids], y[ids]
 
 
 fds = None  # Cache FederatedDataset
@@ -70,12 +69,33 @@ def load_data(partition_id: int, num_partitions: int):
         fds = FederatedDataset(
             dataset="ylecun/mnist",
             partitioners={"train": partitioner},
+            trust_remote_code=True,
         )
+    partition = fds.load_partition(partition_id)
+    partition_splits = partition.train_test_split(test_size=0.2, seed=42)
 
-    dataset = fds.load_partition(partition_id, "train").with_format("numpy")
-    X, y = dataset["image"].reshape((len(dataset), -1)), dataset["label"]
-    # Split the on edge data: 80% train, 20% test
-    X_train, X_test = X[: int(0.8 * len(X))], X[int(0.8 * len(X)) :]
-    y_train, y_test = y[: int(0.8 * len(y))], y[int(0.8 * len(y)) :]
+    partition_splits["train"].set_format("numpy")
+    partition_splits["test"].set_format("numpy")
 
-    return X_train, X_test, y_train, y_test
+    train_partition = partition_splits["train"].map(
+        lambda img: {
+            "img": img.reshape(-1, 28 * 28).squeeze().astype(np.float32) / 255.0
+        },
+        input_columns="image",
+    )
+    test_partition = partition_splits["test"].map(
+        lambda img: {
+            "img": img.reshape(-1, 28 * 28).squeeze().astype(np.float32) / 255.0
+        },
+        input_columns="image",
+    )
+
+    data = (
+        train_partition["img"],
+        train_partition["label"].astype(np.uint32),
+        test_partition["img"],
+        test_partition["label"].astype(np.uint32),
+    )
+
+    train_images, train_labels, test_images, test_labels = map(mx.array, data)
+    return train_images, train_labels, test_images, test_labels
