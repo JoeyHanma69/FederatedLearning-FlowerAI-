@@ -5,7 +5,7 @@ from logging import INFO
 
 import numpy as np 
 
-from flwr.common import Message, Context, MessageType, RecordDict 
+from flwr.common import Context, Message, MessageType, RecordDict 
 from flwr.common.logger import log 
 from flwr.server import Grid, ServerApp 
 
