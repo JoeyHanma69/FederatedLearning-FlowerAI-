@@ -37,11 +37,11 @@ def main(grid: Grid, context: Context):
         log(INFO, "Sampled %s nodes (out of %s)", len(node_ids), len(all_node_ids))    
         
         # Create Messages  
-        RecordDict = RecordDict() 
+        recorddict = RecordDict() 
         messages = []  
         for node_id in node_ids: 
             message = Message( 
-                 content=RecordDict, 
+                 content=recorddict, 
                  message_type=MessageType.QUERY, 
                  dst_node_id=node_id, 
                  group_id=str(server_round),              
